@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/tealeg/xlsx"
 )
 
 var mux map[string]func(http.ResponseWriter, *http.Request)
@@ -34,6 +37,7 @@ func main() {
 	mux["/"] = index
 	mux["/upload"] = upload
 	mux["/file"] = StaticServer
+	mux["/download"] = download
 	server.ListenAndServe()
 }
 
@@ -77,6 +81,45 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		filedir, _ := filepath.Abs(Upload_Dir + filename)
 		fmt.Fprintf(w, "%v", filename+"上传完成,服务器地址:"+filedir)
 	}
+}
+
+func download(w http.ResponseWriter, r *http.Request) {
+	file := xlsx.NewFile()
+	sheet, err := file.AddSheet("Sheet1")
+	if err != nil {
+		panic(err)
+	}
+
+	row := sheet.AddRow()
+	row.SetHeightCM(1) //设置每行的高度
+	cell := row.AddCell()
+	cell.Value = "haha"
+	cell = row.AddCell()
+	cell.Value = "xixi"
+
+	tmpFile := "file.xlsx"
+
+	err = file.Save(tmpFile)
+	if err != nil {
+		panic(err)
+	}
+
+	fs, err := os.Open(tmpFile)
+	defer func() {
+		fs.Close()
+		os.Remove(tmpFile)
+	}()
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	b, _ := ioutil.ReadAll(fs)
+	w.Header().Add("Content-Disposition", "attachment; filename="+fmt.Sprintf("%s", tmpFile))
+	w.Header().Add("Content-Type", "application/vnd.ms-excel") //xls
+	//w.Header().Add("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") //xlsx
+
+	w.Write(b)
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
